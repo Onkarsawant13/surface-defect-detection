@@ -325,12 +325,24 @@ with st.sidebar:
 
     # ── sample image button ───────────────────────────────────────────────
     sample_path = f"samples/{category}.png"
+    if not os.path.exists(sample_path):
+        sample_path = f"samples/{category}.jpg"
+
     if os.path.exists(sample_path):
         if st.button("⚡ Try Sample Image", use_container_width=True):
             with open(sample_path, "rb") as f:
                 from io import BytesIO
-                uploaded = BytesIO(f.read())
-                uploaded.name = f"{category}.jpg"
+                buf = BytesIO(f.read())
+                buf.name = f"{category}.png"
+                st.session_state["sample_image"] = buf
+                st.session_state["sample_category"] = category
+
+    # load from session if no file uploaded
+    if uploaded is None and "sample_image" in st.session_state:
+        if st.session_state.get("sample_category") == category:
+            uploaded = st.session_state["sample_image"]
+        else:
+            del st.session_state["sample_image"]
 
     st.markdown('<hr class="hmi-divider">', unsafe_allow_html=True)
     st.markdown('<p class="sidebar-section">System Info</p>', unsafe_allow_html=True)
