@@ -10,9 +10,34 @@ Industrial HMI-inspired dashboard:
 Run:
     streamlit run app/app.py
 """
-
-import sys
 import os
+from huggingface_hub import hf_hub_download
+
+HF_REPO = "Onkarsawant/surface-defect-memory-banks"
+
+CATEGORIES = [
+    'bottle', 'cable', 'capsule', 'carpet', 'grid',
+    'hazelnut', 'leather', 'metal_nut', 'pill', 'screw',
+    'tile', 'toothbrush', 'transistor', 'wood', 'zipper'
+] 
+
+def ensure_memory_banks():
+    for cat in CATEGORIES:
+        local_path = f"outputs/{cat}/memory_bank.pt"
+        if not os.path.exists(local_path):
+            os.makedirs(f"outputs/{cat}", exist_ok=True)
+            print(f"Downloading memory bank for {cat}...")
+            hf_hub_download(
+                repo_id=HF_REPO,
+                filename=f"{cat}/memory_bank.pt",
+                repo_type="dataset",
+                local_dir="outputs"
+            )
+            print(f"✓ {cat} ready")
+
+ensure_memory_banks()  # runs once at startup
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
