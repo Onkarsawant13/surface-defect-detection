@@ -323,6 +323,15 @@ with st.sidebar:
         label_visibility="collapsed"
     )
 
+    # ── sample image button ───────────────────────────────────────────────
+    sample_path = f"samples/{category}.jpg"
+    if os.path.exists(sample_path):
+        if st.button("⚡ Try Sample Image", use_container_width=True):
+            with open(sample_path, "rb") as f:
+                from io import BytesIO
+                uploaded = BytesIO(f.read())
+                uploaded.name = f"{category}.jpg"
+
     st.markdown('<hr class="hmi-divider">', unsafe_allow_html=True)
     st.markdown('<p class="sidebar-section">System Info</p>', unsafe_allow_html=True)
     st.markdown(
