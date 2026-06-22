@@ -442,38 +442,10 @@ with col_left:
 
     # ── defect report (only if anomaly) ──────────────────────────────────
     if is_anomaly:
-        if result.get("llm_failed") or result.get("report") is None:
-            st.warning(
-                "⚠️ Gemini server is currently unavailable. "
-                "Showing anomaly detection results only — defect report unavailable."
-            )
-        else:
-            report = result["report"]
-            sev    = report.get("severity", "medium").lower()
+        report = result["report"]
+        sev    = report.get("severity", "medium").lower()
 
-            with st.container(border=True):
-                st.markdown('<p class="hmi-panel-label">Defect Report — Root Cause Analysis</p>',
-                            unsafe_allow_html=True)
-
-                fields = [
-                    ("Defect Class", report.get("defect_class", "—")),
-                    ("Location", report.get("location", "—")),
-                    ("Description", report.get("description", "—")),
-                    ("Root Cause", report.get("root_cause", "—")),
-                    ("Severity", f'<span class="severity-pill severity-{sev}">{sev}</span> '
-                                 f'— {report.get("severity_reason","")}'),
-                    ("Recommended Fix", report.get("recommended_fix", "—")),
-                    ("Confidence", report.get("confidence", "—")),
-                ]
-
-                rows_html = "".join(
-                    f'<div class="report-field">'
-                    f'<div class="report-label">{label}</div>'
-                    f'<div class="report-value">{value}</div>'
-                    f'</div>'
-                    for label, value in fields
-                )
-                st.markdown(rows_html, unsafe_allow_html=True)
+            
 
         
 

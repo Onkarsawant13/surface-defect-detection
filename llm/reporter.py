@@ -152,15 +152,10 @@ def run_pipeline(
         }
 
     print("Anomaly detected — generating LLM explanation...")
+    report  = explain_defect(img_array, heatmap, score, category, api_key)
     overlay = burn_heatmap_on_image(img_array, heatmap)
 
-    try:
-        report = explain_defect(img_array, heatmap, score, category, api_key)
-        llm_failed = False
-    except Exception as e:
-        print(f"LLM call failed: {e}")
-        report = None
-        llm_failed = True
+    
 
     return {
         "status"       : "anomaly",
@@ -168,7 +163,6 @@ def run_pipeline(
         "anomaly_score": round(score, 4),
         "threshold"    : threshold,
         "report"       : report,
-        "llm_failed"   : llm_failed,
         "heatmap"      : heatmap,
         "overlay"      : overlay,
         "image_array"  : img_array,
