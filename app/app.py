@@ -324,7 +324,7 @@ with st.sidebar:
     )
 
     # ── sample image button ───────────────────────────────────────────────
-    sample_path = f"samples/{category}.jpg"
+    sample_path = f"samples/{category}.png"
     if os.path.exists(sample_path):
         if st.button("⚡ Try Sample Image", use_container_width=True):
             with open(sample_path, "rb") as f:
