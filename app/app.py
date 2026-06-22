@@ -399,6 +399,8 @@ if not run_button:
 with st.spinner("Running anomaly detection..."):
     # save uploaded file to temp path
     temp_path = "temp_upload.png"
+    if hasattr(uploaded, 'seek'):
+        uploaded.seek(0)  # reset buffer for BytesIO (sample images)
     img = Image.open(uploaded).convert("RGB")
     img.save(temp_path)
 
