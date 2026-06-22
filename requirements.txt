@@ -9,3 +9,8 @@ tqdm>=4.65
 timm>=0.9        # optional — for ViT/EfficientNet backbone alternative
 wandb>=0.16      # optional — Weights & Biases experiment tracking
 ststreamlit>=1.30
+huggingface_hub
+google-generativeai
+google-genai
+python-dotenv
+streamlit

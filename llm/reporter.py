@@ -1,22 +1,23 @@
 """
-reporter.py — Pipeline orchestrator (no auto-detection)
---------------------------------------------------------
-Flow:
-  1. User selects category (dropdown in UI)
-  2. PatchCore loads memory bank + scores image
-  3. If anomaly → LLM explains defect
-  4. Return structured result to UI
+reporter.py — Pipeline orchestrator
+-------------------------------------
+API key loading priority:
+  1. Streamlit secrets (st.secrets) — used on Streamlit Community Cloud
+  2. .env file — used locally
+  3. OS environment variable — fallback
 
-API key loaded from .env file — never hardcode it.
+This means the same file works locally AND deployed on Streamlit Cloud
+with zero changes.
 """
 
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dotenv import load_dotenv
 from pathlib import Path
+from dotenv import load_dotenv
 
+# load .env for local development
 _here = Path(__file__).resolve().parent
 for _candidate in [_here / ".env", _here.parent / ".env"]:
     if _candidate.exists():
@@ -25,7 +26,6 @@ for _candidate in [_here / ".env", _here.parent / ".env"]:
 
 import numpy as np
 import torch
-from pathlib import Path
 from PIL import Image
 from torchvision import transforms
 
@@ -40,9 +40,6 @@ TRANSFORM = transforms.Compose([
                          [0.229, 0.224, 0.225]),
 ])
 
-IMAGENET_MEAN = np.array([0.485, 0.456, 0.406])
-IMAGENET_STD  = np.array([0.229, 0.224, 0.225])
-
 CATEGORIES = [
     "bottle", "cable", "capsule", "carpet", "grid",
     "hazelnut", "leather", "metal_nut", "pill", "screw",
@@ -50,35 +47,55 @@ CATEGORIES = [
 ]
 
 
+def _get_api_key() -> str | None:
+    """
+    Fetch GEMINI_API_KEY from any available source.
+    Priority: Streamlit secrets → .env → OS env
+    """
+    # 1 — Streamlit secrets (Streamlit Cloud deployment)
+    try:
+        import streamlit as st
+        key = st.secrets.get("GEMINI_API_KEY")
+        if key:
+            return key
+    except Exception:
+        pass
+
+    # 2 — .env / OS environment (local development)
+    return os.getenv("GEMINI_API_KEY")
+
+
 def load_image(image_path: str) -> tuple:
     """Load image → (tensor for model, uint8 array for LLM)."""
     pil    = Image.open(image_path).convert("RGB")
-    arr    = np.array(pil.resize((224, 224)))          # uint8 for LLM
-    tensor = TRANSFORM(pil)                            # normalised for model
+    arr    = np.array(pil.resize((224, 224)))
+    tensor = TRANSFORM(pil)
     return tensor, arr
 
 
 def run_pipeline(
     image_path  : str,
     category    : str,
-    memory_dir  : str  = "outputs",
+    memory_dir  : str   = "outputs",
     threshold   : float = 2.8,
-    device      : str  = "cpu",
+    device      : str   = "cpu",
 ) -> dict:
     """
     Full pipeline: image + category → anomaly score → LLM report.
 
-    API key is read automatically from .env — no need to pass it.
+    Works identically locally and on Streamlit Cloud.
+    API key is fetched automatically — no need to pass it.
 
     Args:
         image_path : path to uploaded image
-        category   : product category selected by user e.g. "bottle"
-        memory_dir : folder containing memory_bank.pt files
-        threshold  : anomaly score cutoff (default 0.5)
+        category   : product category e.g. "bottle"
+        memory_dir : folder containing category/memory_bank.pt files
+        threshold  : anomaly score cutoff (default 2.8)
         device     : "cpu" or "cuda"
 
     Returns:
-        dict with status, score, report, heatmap, overlay
+        dict with keys: status, category, anomaly_score,
+                        threshold, report, heatmap, overlay, image_array
     """
 
     # ── validate category ────────────────────────────────────────────────────
@@ -93,9 +110,9 @@ def run_pipeline(
     bank_path = Path(memory_dir) / category / "memory_bank.pt"
     if not bank_path.exists():
         return {
-            "status"  : "error",
-            "message" : f"No memory bank found for '{category}'. "
-                        f"Run: python train_eval.py --category {category}"
+            "status" : "error",
+            "message": f"No memory bank found for '{category}'. "
+                       f"Run: python train_eval.py --category {category}"
         }
 
     model = PatchCore(device=device)
@@ -109,7 +126,7 @@ def run_pipeline(
     print(f"Category: {category} | Score: {score:.4f} | "
           f"{'ANOMALY' if is_anomaly else 'NORMAL'}")
 
-    # ── normal image — return early, no LLM call ─────────────────────────────
+    # ── normal — skip LLM ────────────────────────────────────────────────────
     if not is_anomaly:
         return {
             "status"       : "normal",
@@ -122,13 +139,16 @@ def run_pipeline(
             "overlay"      : None,
         }
 
-    # ── anomaly — call LLM for explanation ───────────────────────────────────
-    api_key = os.getenv("GEMINI_API_KEY")
+    # ── anomaly — call LLM ───────────────────────────────────────────────────
+    api_key = _get_api_key()
     if not api_key:
         return {
             "status" : "error",
-            "message": "GEMINI_API_KEY not found. "
-                       "Add it to your .env file."
+            "message": (
+                "GEMINI_API_KEY not found.\n"
+                "Local: add it to your .env file.\n"
+                "Streamlit Cloud: add it under Settings → Secrets."
+            )
         }
 
     print("Anomaly detected — generating LLM explanation...")
