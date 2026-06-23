@@ -89,8 +89,10 @@ def explain_defect(
         overlay   = burn_heatmap_on_image(image_array, heatmap)
         pil_image = array_to_pil(overlay)
 
+        # resize to smaller image to reduce token usage
+        pil_image = pil_image.resize((112, 112))
         buf = io.BytesIO()
-        pil_image.save(buf, format="PNG")
+        pil_image.save(buf, format="JPEG", quality=75)  # JPEG uses far fewer tokens than PNG
         image_bytes = buf.getvalue()
 
         prompt = EXPLANATION_PROMPT.format(
