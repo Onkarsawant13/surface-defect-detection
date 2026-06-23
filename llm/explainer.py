@@ -62,43 +62,47 @@ def explain_defect(
     anomaly_score: float,
     category     : str,
     api_key      : str,
-) -> dict:
+) -> dict | None:
     """
     Get full defect explanation from Gemini vision.
-
-    Uses gemini-2.5-flash-lite — current free-tier model (2026).
+    Returns None if Gemini is unavailable instead of raising.
     """
-    client = genai.Client(api_key=api_key)
-
-    overlay   = burn_heatmap_on_image(image_array, heatmap)
-    pil_image = array_to_pil(overlay)
-
-    buf = io.BytesIO()
-    pil_image.save(buf, format="PNG")
-    image_bytes = buf.getvalue()
-
-    prompt = EXPLANATION_PROMPT.format(
-        score    = anomaly_score,
-        category = category,
-    )
-
-    response = client.models.generate_content(
-        model    = "gemini-2.5-flash-lite",
-        contents = [
-            types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-            prompt,
-        ]
-    )
-
-    raw_text = response.text.strip()
-    clean    = re.sub(r"```json|```", "", raw_text).strip()
-
     try:
-        report = json.loads(clean)
-    except json.JSONDecodeError:
-        match  = re.search(r"\{.*\}", clean, re.DOTALL)
-        report = json.loads(match.group()) if match else {"raw_response": raw_text}
+        client = genai.Client(api_key=api_key)
 
-    report["anomaly_score"] = round(anomaly_score, 4)
-    report["category"]      = category
-    return report
+        overlay   = burn_heatmap_on_image(image_array, heatmap)
+        pil_image = array_to_pil(overlay)
+
+        buf = io.BytesIO()
+        pil_image.save(buf, format="PNG")
+        image_bytes = buf.getvalue()
+
+        prompt = EXPLANATION_PROMPT.format(
+            score    = anomaly_score,
+            category = category,
+        )
+
+        response = client.models.generate_content(
+            model    = "gemini-2.5-flash-lite",
+            contents = [
+                types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+                prompt,
+            ]
+        )
+
+        raw_text = response.text.strip()
+        clean    = re.sub(r"```json|```", "", raw_text).strip()
+
+        try:
+            report = json.loads(clean)
+        except json.JSONDecodeError:
+            match  = re.search(r"\{.*\}", clean, re.DOTALL)
+            report = json.loads(match.group()) if match else {"raw_response": raw_text}
+
+        report["anomaly_score"] = round(anomaly_score, 4)
+        report["category"]      = category
+        return report
+
+    except Exception as e:
+        print(f"[explainer] Gemini call failed: {type(e).__name__}: {e}")
+        return None

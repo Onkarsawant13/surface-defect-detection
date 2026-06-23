@@ -110,13 +110,9 @@ def run_pipeline(
     print("Anomaly detected — generating LLM explanation...")
     overlay = burn_heatmap_on_image(img_array, heatmap)
 
-    try:
-        report     = explain_defect(img_array, heatmap, score, category, api_key)
-        llm_failed = False
-    except Exception as e:
-        print(f"LLM call failed: {e}")
-        report     = None
-        llm_failed = True
+    # explain_defect returns None if Gemini is unavailable (errors handled inside)
+    report     = explain_defect(img_array, heatmap, score, category, api_key)
+    llm_failed = report is None
 
     return {
         "status"       : "anomaly",
