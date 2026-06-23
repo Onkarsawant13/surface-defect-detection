@@ -9,6 +9,7 @@ Model: gemini-2.5-flash-lite
 import json
 import re
 import io
+import time
 import numpy as np
 from PIL import Image
 import matplotlib.cm as cm
@@ -56,6 +57,21 @@ def array_to_pil(image_array: np.ndarray) -> Image.Image:
     return Image.fromarray(image_array.astype(np.uint8))
 
 
+def _call_gemini(client, image_bytes: bytes, prompt: str) -> str:
+    """
+    Single Gemini API call — completely isolated so ANY exception is catchable.
+    Returns response text or raises.
+    """
+    response = client.models.generate_content(
+        model    = "gemini-2.5-flash-lite",
+        contents = [
+            types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+            prompt,
+        ]
+    )
+    return response.text.strip()
+
+
 def explain_defect(
     image_array  : np.ndarray,
     heatmap      : np.ndarray,
@@ -65,7 +81,7 @@ def explain_defect(
 ) -> dict | None:
     """
     Get full defect explanation from Gemini vision.
-    Returns None if Gemini is unavailable instead of raising.
+    Returns None if Gemini is unavailable — never raises.
     """
     try:
         client = genai.Client(api_key=api_key)
@@ -82,17 +98,32 @@ def explain_defect(
             category = category,
         )
 
-        response = client.models.generate_content(
-            model    = "gemini-2.5-flash-lite",
-            contents = [
-                types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-                prompt,
-            ]
-        )
+        # retry up to 2 times with delay for 503/overload errors
+        raw_text = None
+        last_error = None
+        for attempt in range(3):
+            try:
+                raw_text = _call_gemini(client, image_bytes, prompt)
+                break  # success
+            except BaseException as e:
+                last_error = e
+                err_str = str(e)
+                # 503 overload or 429 rate limit — wait and retry
+                if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    wait = (attempt + 1) * 8
+                    print(f"[explainer] Gemini busy (attempt {attempt+1}), waiting {wait}s...")
+                    time.sleep(wait)
+                    continue
+                # any other error — don't retry
+                print(f"[explainer] Gemini error: {type(e).__name__}: {err_str}")
+                return None
 
-        raw_text = response.text.strip()
-        clean    = re.sub(r"```json|```", "", raw_text).strip()
+        if raw_text is None:
+            print(f"[explainer] All attempts failed: {last_error}")
+            return None
 
+        # parse JSON response
+        clean = re.sub(r"```json|```", "", raw_text).strip()
         try:
             report = json.loads(clean)
         except json.JSONDecodeError:
@@ -103,6 +134,6 @@ def explain_defect(
         report["category"]      = category
         return report
 
-    except Exception as e:
-        print(f"[explainer] Gemini call failed: {type(e).__name__}: {e}")
+    except BaseException as e:
+        print(f"[explainer] Unexpected error: {type(e).__name__}: {e}")
         return None
